@@ -4,16 +4,14 @@ import (
     "bytes"
     "encoding/json"
     "log"
-    "fmt"
     "net/http"
     "os"
-    "wasabi/internal/models"
 )
 
 func SendMessage(token string, phone string, body string) error {
     url := os.Getenv("WUZAPI_URL") + "/chat/send/text"
     
-    // Asegúrate de que este JSON sea exactamente lo que Wuzapi espera
+    // Importante: Wuzapi suele esperar "Phone" y "Body"
     msg := map[string]interface{}{
         "Phone": phone,
         "Body":  body,
@@ -32,7 +30,7 @@ func SendMessage(token string, phone string, body string) error {
     }
     defer resp.Body.Close()
 
-    // ESTO ES LO MÁS IMPORTANTE AHORA:
+    // Este log nos dirá si Wuzapi aceptó el mensaje o si hay un error de Token/URL
     log.Printf("📡 Respuesta de Wuzapi al enviar: Código %d", resp.StatusCode)
     return nil
-}    
+}
