@@ -13,7 +13,6 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Capturamos el Token del Header
     token := r.Header.Get("Token")
 
     var payload models.WuzapiRequest
@@ -22,12 +21,20 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Respondemos solo si es un mensaje de texto
+    // 1. EL FILTRO: Si FromMe es true, salimos silenciosamente
+    if payload.Data.FromMe {
+        return 
+    }
+
+    // 2. LA LÓGICA: Solo si es mensaje y no es mío
     if payload.Event == "Message" && payload.Data.Body != "" {
-        log.Printf("Mensaje de %s (Instancia: %s)", payload.Data.From, token)
+        log.Printf("📩 Mensaje de %s (Token: %s)", payload.Data.From, token)
         
-        // El "Hola" simple que pediste
-        _ = wuzapi.SendMessage(token, payload.Data.From, "¡Hola! Recibido.")
+        // Enviamos la respuesta
+        err := wuzapi.SendMessage(token, payload.Data.From, "¡Hola! Recibido.")
+        if err != nil {
+            log.Printf("❌ Error al enviar: %v", err)
+        }
     }
 
     w.WriteHeader(http.StatusOK)

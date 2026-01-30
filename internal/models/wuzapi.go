@@ -1,16 +1,15 @@
 package models
 
-// TextPayload es lo que enviamos HACIA Wuzapi
-type TextPayload struct {
-	Phone string `json:"Phone"`
-	Body  string `json:"Body"`
+type WuzapiRequest struct {
+    Event string `json:"event"`
+    Data  struct {
+        From   string `json:"from"`
+        Body   string `json:"body"`
+        FromMe bool   `json:"fromMe"` // <--- ESTO EVITA EL BUCLE
+    } `json:"data"`
 }
 
-// WuzapiRequest es lo que recibimos DESDE Wuzapi vía Webhook
-type WuzapiRequest struct {
-	Event string `json:"event"`
-	Data  struct {
-		From string `json:"from"`
-		Body string `json:"body"`
-	} `json:"data"`
+type TextPayload struct {
+    Phone string `json:"Phone"`
+    Body  string `json:"Body"`
 }
