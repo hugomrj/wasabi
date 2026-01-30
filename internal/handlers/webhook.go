@@ -60,7 +60,7 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		token := "USER_TOKEN_1" 
 		
 		log.Printf("📩 Respondiendo a %s...", remitente)
-		err := wuzapi.SendMessage(token, remitente, "¡Hugo! Ahora sí capturé tu mensaje: " + msg.Conversation)
+		err := wuzapi.SendMessage(token, remitente, "Capturé tu mensaje: " + msg.Conversation)
 		if err != nil {
 			log.Printf("❌ Error enviando: %v", err)
 		} else {
