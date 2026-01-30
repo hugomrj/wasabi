@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"net/url"
 	"wasabi/internal/wuzapi"
 )
+
 
 // Esta estructura coincide con el JSON que viene dentro de jsonData
 type WuzapiEvent struct {
