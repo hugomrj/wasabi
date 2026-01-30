@@ -27,43 +27,23 @@ type MessageDetail struct {
 	} `json:"Message"`
 }
 
+
+
+
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("🔔 ¡Webhook invocado!")
+    log.Println("🔔 ¡Webhook invocado!")
 
-	// 1. Leer el cuerpo crudo para que no de error de decodificación
-	body, _ := io.ReadAll(r.Body)
-	
-	var raw RawWuzapi
-	if err := json.Unmarshal(body, &raw); err != nil {
-		log.Printf("❌ Error decodificando Raw: %v", err)
-		return
-	}
+    // Leemos TODO lo que venga en el cuerpo, sea lo que sea
+    body, err := io.ReadAll(r.Body)
+    if err != nil {
+        log.Printf("❌ Error leyendo cuerpo: %v", err)
+        return
+    }
 
-	// 2. Decodificar el jsonData que viene dentro
-	var detail MessageDetail
-	if err := json.Unmarshal([]byte(raw.JSONData), &detail); err != nil {
-		log.Printf("❌ Error decodificando jsonData: %v", err)
-		return
-	}
+    // IMPRIMIMOS EL CUERPO TAL CUAL LLEGA
+    log.Printf("DEBUG - CUERPO CRUDO: %s", string(body))
+    log.Printf("DEBUG - CONTENT-TYPE: %s", r.Header.Get("Content-Type"))
 
-	log.Printf("📦 Mensaje recibido de %s: %s", detail.Info.Sender, detail.Message.Conversation)
-
-	// 3. Filtros
-	if detail.Info.IsFromMe {
-		log.Println("⏭️ Ignorando mensaje propio")
-		return
-	}
-
-	if detail.Event == "Message" {
-		token := r.Header.Get("Token")
-		// Limpiar el Sender (Wuzapi manda 595...:44@s.whatsapp.net, necesitamos solo el número)
-		// Aquí lo mandamos tal cual, Wuzapi suele limpiarlo solo al enviar
-		log.Printf("📩 Respondiendo a: %s", detail.Info.Sender)
-		err := wuzapi.SendMessage(token, detail.Info.Sender, "¡Hola! Recibido desde Wasabi.")
-		if err != nil {
-			log.Printf("❌ Error al enviar respuesta: %v", err)
-		}
-	}
-
-	w.WriteHeader(http.StatusOK)
+    // Por ahora solo respondemos OK para que Wuzapi no reintente
+    w.WriteHeader(http.StatusOK)
 }
