@@ -55,6 +55,7 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	
 	if remitente != "" && msg.Conversation != "" {
 		// Usamos el token fijo que sabemos que funciona
 		token := "USER_TOKEN_1" 
