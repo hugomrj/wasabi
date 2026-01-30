@@ -3,6 +3,7 @@ package wuzapi
 import (
     "bytes"
     "encoding/json"
+    "log"
     "fmt"
     "net/http"
     "os"
