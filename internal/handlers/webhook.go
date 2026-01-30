@@ -7,8 +7,7 @@ import (
 	"wasabi/internal/wuzapi"
 )
 
-
-// Esta estructura coincide con el JSON que viene dentro de jsonData
+// Estructura exacta basada en tu log real
 type WuzapiEvent struct {
 	Event string `json:"type"`
 	Info  struct {
@@ -23,41 +22,42 @@ type WuzapiEvent struct {
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("🔔 ¡Webhook invocado!")
 
-	// 1. Parseamos el formulario (porque viene como x-www-form-urlencoded)
+	// 1. Parsear el formulario
 	if err := r.ParseForm(); err != nil {
 		log.Printf("❌ Error parseando formulario: %v", err)
 		return
 	}
 
-	// 2. Extraemos el campo 'jsonData'
+	// 2. Obtener el jsonData
 	rawJSON := r.FormValue("jsonData")
-	if rawJSON == "" {
-		log.Println("⚠️ No se encontró jsonData en la petición")
-		return
-	}
-
-	// 3. Decodificamos el JSON que estaba escondido en el formulario
 	var detail WuzapiEvent
 	if err := json.Unmarshal([]byte(rawJSON), &detail); err != nil {
-		log.Printf("❌ Error decodificando JSON interno: %v", err)
+		log.Printf("❌ Error decodificando: %v", err)
 		return
 	}
 
-	log.Printf("📦 Mensaje de %s: %s", detail.Info.Sender, detail.Message.Conversation)
+	// 3. Capturar los datos reales (usamos Sender para responder)
+	remitente := detail.Info.Sender
+	texto := detail.Message.Conversation
 
-	// 4. Filtro: No respondernos a nosotros mismos
+	log.Printf("📦 Mensaje de %s: %s", remitente, texto)
+
 	if detail.Info.IsFromMe {
 		log.Println("⏭️ Ignorando mensaje propio")
 		return
 	}
 
-	// 5. Responder si es un mensaje
-	if detail.Event == "Message" {
+	// 4. Responder
+	if detail.Event == "Message" && remitente != "" {
+		// ¡OJO AQUÍ!: Si el Token no viene en el Header, usa el que configuraste en el .env
 		token := r.Header.Get("Token")
-		log.Printf("📩 Enviando respuesta a: %s", detail.Info.Sender)
+		if token == "" {
+			token = "USER_TOKEN_1" // Forzamos el token si el webhook no lo trae
+		}
+
+		log.Printf("📩 Intentando responder a %s con Token: %s", remitente, token)
 		
-		// Enviamos la respuesta usando tu módulo wuzapi
-		err := wuzapi.SendMessage(token, detail.Info.Sender, "¡Recibido! Wasabi está funcionando 🚀")
+		err := wuzapi.SendMessage(token, remitente, "¡Hola Hugo! Tu bot Wasabi ya sabe leer y responder 🚀")
 		if err != nil {
 			log.Printf("❌ Error enviando: %v", err)
 		}
