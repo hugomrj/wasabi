@@ -11,7 +11,7 @@ import (
 func main() {
     godotenv.Load() // Carga el .env
 
-    port := os.Getenv("PORT")
+    port := os.Getenv("WASABI_PORT")
     if port == "" {
         port = "8000"
     }
