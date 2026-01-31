@@ -3,11 +3,8 @@ package handlers
 import (
     "bytes"          
     "encoding/json"
-    "fmt"            // Para formatear errores (recomendado)
-    "io"             // Para leer respuestas (recomendado)
     "log"
     "net/http"
-    "os"
     "strings"
     "wasabi/internal/wuzapi"
 )
