@@ -86,28 +86,33 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// Esta función va fuera de WebhookHandler, al final del archivo
 func llamarAlServidorIA(textoUsuario string) string {
-    // La dirección de tu servidor Python
-    url := "https://japo.click/tu-bot/ask"
+    url := "https://japo.click/charlette/ask"
 
-    // 1. Creamos el sobre (JSON) con el parámetro "message" que espera Python
+    // 1. Preparar el envío
     payload := map[string]string{"message": textoUsuario}
     jsonPayload, _ := json.Marshal(payload)
 
-    // 2. Enviamos el sobre a la otra computadora
-    resp, err := http.Post(url, "application/json", strings.NewReader(string(jsonPayload)))
+    // 2. Realizar la petición
+    resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
     if err != nil {
-        log.Printf("❌ Error al contactar servidor IA: %v", err)
-        return "Lo siento, tengo problemas para conectarme con mi cerebro."
+        log.Printf("❌ Error al conectar con Python: %v", err)
+        return "Error de conexión"
     }
     defer resp.Body.Close()
 
-    // 3. Abrimos la respuesta de Python para sacar el "reply"
+    // 3. LA CLAVE: Estructura con etiqueta exacta
     var result struct {
-        Reply string `json:"reply"`
+        // La etiqueta `json:"reply"` le dice a Go que busque "reply" en minúsculas
+        Respuesta string `json:"reply"` 
     }
-    json.NewDecoder(resp.Body).Decode(&result)
 
-    return result.Reply
+    // 4. Decodificar
+    err = json.NewDecoder(resp.Body).Decode(&result)
+    if err != nil {
+        log.Printf("❌ Error decodificando JSON de la IA: %v", err)
+        return "Error al leer respuesta"
+    }
+
+    return result.Respuesta
 }
