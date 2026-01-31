@@ -70,6 +70,9 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
         // CAMBIO: En lugar de "Capturé...", llamamos a la función puente
         mensajeDeRespuesta := llamarAlServidorIA(msg.Conversation)
 
+		// ESTO ES LO QUE DEBES AGREGAR:
+		log.Printf("🤖 IA respondió: [%s]", mensajeDeRespuesta)
+
         err := wuzapi.SendMessage(token, remitente, mensajeDeRespuesta)
 
 		if err != nil {
