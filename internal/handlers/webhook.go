@@ -9,111 +9,78 @@ import (
     "wasabi/internal/wuzapi"
 )
 
-// Estructura corregida para seguir el mapa real del log
-type WuzapiResponse struct {
-	EventData struct {
-		Info struct {
-			Sender   string `json:"Sender"`
-			SenderAlt string `json:"SenderAlt"` // Usamos este si el primero falla
-			IsFromMe bool   `json:"IsFromMe"`
-		} `json:"Info"`
-		Message struct {
-			Conversation string `json:"conversation"`
-		} `json:"Message"`
-		Type string `json:"type"`
-	} `json:"event"` // IMPORTANTE: Todo está dentro de "event"
+// WebhookPayload representa la estructura genérica del mensaje entrante
+type WebhookPayload struct {
+    EventData struct {
+        Info struct {
+            Sender    string `json:"Sender"`
+            SenderAlt string `json:"SenderAlt"`
+            IsFromMe  bool   `json:"IsFromMe"`
+        } `json:"Info"`
+        Message struct {
+            Conversation string `json:"conversation"`
+            // Captura también mensajes con formato o respuestas
+            ExtendedText struct {
+                Text string `json:"text"`
+            } `json:"extendedTextMessage"`
+        } `json:"Message"`
+        Type string `json:"type"`
+    } `json:"event"`
 }
-
-
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
-	log.Println("🔔 ¡Webhook invocado!")
+    // 1. Respondemos 200 OK inmediatamente para liberar la conexión de entrada
+    w.WriteHeader(http.StatusOK)
 
-	r.ParseForm()
-	rawJSON := r.FormValue("jsonData")
-	
-	var wrapper WuzapiResponse
+    r.ParseForm()
+    rawJSON := r.FormValue("jsonData")
+    if rawJSON == "" {
+        return
+    }
 
-	err := json.Unmarshal([]byte(rawJSON), &wrapper)
+    // 2. Procesamos en segundo plano (Asíncrono)
+    go func(data string) {
+        var payload WebhookPayload
+        if err := json.Unmarshal([]byte(data), &payload); err != nil {
+            log.Printf("❌ Error decodificando payload: %v", err)
+            return
+        }
 
-	if err != nil {
-		log.Printf("❌ Error decodificando: %v", err)
-		return
-	}
+        // Ignorar si el mensaje lo enviamos nosotros
+        if payload.EventData.Info.IsFromMe {
+            return
+        }
 
+        // Extraer el texto (priorizar conversación, luego texto extendido)
+        texto := payload.EventData.Message.Conversation
+        if texto == "" {
+            texto = payload.EventData.Message.ExtendedText.Text
+        }
 
-	// Extraemos los datos del nivel "event"
-	info := wrapper.EventData.Info
-	msg := wrapper.EventData.Message
+        if texto == "" {
+            log.Println("⚠️ Mensaje sin texto recibido")
+            return
+        }
 
-	// Elegimos el remitente: Si Sender tiene ":", preferimos SenderAlt que es el número limpio
-	remitente := info.Sender
-	if info.SenderAlt != "" {
-		remitente = info.SenderAlt
-	}
-	// Limpiamos el @s.whatsapp.net si existe
-	remitente = strings.Split(remitente, "@")[0]
-	remitente = strings.Split(remitente, ":")[0]
+        // Limpiar remitente
+        remitente := payload.EventData.Info.Sender
+        if payload.EventData.Info.SenderAlt != "" {
+            remitente = payload.EventData.Info.SenderAlt
+        }
+        remitente = strings.Split(strings.Split(remitente, "@")[0], ":")[0]
 
-	log.Printf("📦 Mensaje de [%s]: %s", remitente, msg.Conversation)
+        log.Printf("📩 Procesando mensaje de [%s]: %s", remitente, texto)
 
-	if info.IsFromMe {
-		log.Println("⏭️ Ignorando mensaje propio")
-		return
-	}
+        // 3. Llamada a la IA (Aquí Go esperará pacientemente el tiempo que haga falta)
+        respuestaIA := llamarAlServidorIA(texto)
 
-	
-	if remitente != "" && msg.Conversation != "" {
+        // 4. Enviar de vuelta a WhatsApp
         token := "USER_TOKEN_1" 
-        
-        log.Printf("📩 Consultando IA para %s...", remitente)
-
-        // CAMBIO: En lugar de "Capturé...", llamamos a la función puente
-        mensajeDeRespuesta := llamarAlServidorIA(msg.Conversation)
-
-		// ESTO ES LO QUE DEBES AGREGAR:
-		log.Printf("🤖 IA respondió: [%s]", mensajeDeRespuesta)
-
-        err := wuzapi.SendMessage(token, remitente, mensajeDeRespuesta)
-
-		if err != nil {
-			log.Printf("❌ Error enviando: %v", err)
-		} else {
-			log.Println("✅ Respuesta enviada con éxito")
-		}
-	}
-
-	w.WriteHeader(http.StatusOK)
-}
-
-
-func llamarAlServidorIA(textoUsuario string) string {
-    url := "https://japo.click/charlette/ask"
-
-    // 1. Preparar el envío
-    payload := map[string]string{"message": textoUsuario}
-    jsonPayload, _ := json.Marshal(payload)
-
-    // 2. Realizar la petición
-    resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
-    if err != nil {
-        log.Printf("❌ Error al conectar con Python: %v", err)
-        return "Error de conexión"
-    }
-    defer resp.Body.Close()
-
-    // 3. LA CLAVE: Estructura con etiqueta exacta
-    var result struct {
-        // La etiqueta `json:"reply"` le dice a Go que busque "reply" en minúsculas
-        Respuesta string `json:"reply"` 
-    }
-
-    // 4. Decodificar
-    err = json.NewDecoder(resp.Body).Decode(&result)
-    if err != nil {
-        log.Printf("❌ Error decodificando JSON de la IA: %v", err)
-        return "Error al leer respuesta"
-    }
-
-    return result.Respuesta
+        err := wuzapi.SendMessage(token, remitente, respuestaIA)
+        if err != nil {
+            log.Printf("❌ Error enviando respuesta a %s: %v", remitente, err)
+        } else {
+            log.Printf("✅ Respuesta enviada con éxito a %s", remitente)
+        }
+    }(rawJSON)
 }
