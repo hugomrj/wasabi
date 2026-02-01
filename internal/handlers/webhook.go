@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time" // Importante para el Sleep y Timeout
 	"wasabi/internal/wuzapi"
 )
 
@@ -27,8 +28,11 @@ type WebhookPayload struct {
 	} `json:"event"`
 }
 
+// 1. SEMÁFORO GLOBAL: Solo permite 1 consulta a la vez a la IA.
+// Esto garantiza que los mensajes hagan fila y no saturen la RAM.
+var iaSemaphore = make(chan struct{}, 1)
+
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Responder 200 OK inmediatamente para evitar timeouts en Wuzapi
 	w.WriteHeader(http.StatusOK)
 
 	r.ParseForm()
@@ -37,7 +41,6 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Procesar de forma asíncrona (Goroutine)
 	go func(data string) {
 		var payload WebhookPayload
 		if err := json.Unmarshal([]byte(data), &payload); err != nil {
@@ -49,7 +52,6 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Extraer texto (robusto para diferentes tipos de mensajes)
 		prompt := payload.EventData.Message.Conversation
 		if prompt == "" {
 			prompt = payload.EventData.Message.ExtendedText.Text
@@ -59,19 +61,15 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Limpiar y formatear el número del remitente
 		remitente := payload.EventData.Info.Sender
 		if payload.EventData.Info.SenderAlt != "" {
 			remitente = payload.EventData.Info.SenderAlt
 		}
 		remitente = strings.Split(strings.Split(remitente, "@")[0], ":")[0]
 
-		log.Printf("📩 Consultando IA para [%s]...", remitente)
-
-		// 3. Llamada a la IA (Puede tardar, pero no bloquea el servidor)
+		// 2. LLAMADA AL DOMINIO: GetExternalResponse ahora gestiona la fila
 		respuestaIA := GetExternalResponse(prompt)
 
-		// 4. Enviar respuesta final a WhatsApp
 		token := "USER_TOKEN_1"
 		err := wuzapi.SendMessage(token, remitente, respuestaIA)
 		if err != nil {
@@ -82,50 +80,49 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}(rawJSON)
 }
 
-
-// GetExternalResponse envía un prompt a un servicio externo y devuelve la respuesta procesada.
 func GetExternalResponse(prompt string) string {
-	// Podrías incluso pasar la URL como parámetro si quieres que sea 100% genérica
+	// 3. ENTRADA A LA FILA: Si hay otro proceso, este espera aquí.
+	log.Printf("⏳ Mensaje en espera de turno para IA...")
+	iaSemaphore <- struct{}{}
+	defer func() { <-iaSemaphore }() // Libera el turno al salir
+
 	const targetURL = "https://japo.click/charlette/ask"
+	const maxRetries = 2
 
-	// 1. Empaquetar el mensaje
-	payload := map[string]string{"message": prompt}
-	jsonPayload, err := json.Marshal(payload)
-	if err != nil {
-		log.Printf("❌ Error al serializar JSON: %v", err)
-		return "Error interno: no se pudo procesar el formato del mensaje."
+	log.Printf("📩 Procesando IA ahora...")
+
+	for i := 0; i < maxRetries; i++ {
+		// Preparar Payload
+		payload := map[string]string{"message": prompt}
+		jsonPayload, _ := json.Marshal(payload)
+
+		// Cliente con Timeout para no quedarse colgado
+		client := &http.Client{Timeout: 45 * time.Second}
+		resp, err := client.Post(targetURL, "application/json", bytes.NewBuffer(jsonPayload))
+
+		if err != nil || (resp != nil && resp.StatusCode != http.StatusOK) {
+			log.Printf("⚠️ Intento %d fallido. Reintentando...", i+1)
+			if resp != nil {
+				resp.Body.Close()
+			}
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		var result struct {
+			Reply string `json:"reply"`
+		}
+
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+
+		if err == nil && strings.TrimSpace(result.Reply) != "" {
+			return result.Reply
+		}
+
+		log.Printf("⚠️ Respuesta vacía en intento %d", i+1)
+		time.Sleep(1 * time.Second)
 	}
 
-	// 2. Realizar la petición con un tiempo límite (opcional pero recomendado)
-	resp, err := http.Post(targetURL, "application/json", bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		log.Printf("❌ Error de red/conexión: %v", err)
-		return "No se pudo establecer conexión con el servicio externo."
-	}
-	defer resp.Body.Close()
-
-	// 3. Verificar que el servidor destino respondió correctamente
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("⚠️ El servicio externo devolvió código: %d", resp.StatusCode)
-		return "El servicio externo encontró un error al procesar la solicitud."
-	}
-
-	// 4. Decodificar la respuesta esperada
-	var result struct {
-		Reply string `json:"reply"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("❌ Error al decodificar la respuesta: %v", err)
-		return "La respuesta recibida no tiene un formato válido."
-	}
-
-	// 5. Validar que no llegue vacío
-	finalText := strings.TrimSpace(result.Reply)
-	if finalText == "" {
-		log.Printf("⚠️ El servicio devolvió una respuesta vacía")
-		return "No se obtuvo una respuesta válida del servicio."
-	}
-
-	return finalText
+	return "Lo siento, mi cerebro está saturado. ¿Podrías intentar en un momento?"
 }
