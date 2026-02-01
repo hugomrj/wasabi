@@ -69,7 +69,7 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("📩 Consultando IA para [%s]...", remitente)
 
 		// 3. Llamada a la IA (Puede tardar, pero no bloquea el servidor)
-		respuestaIA := getAIResponse(prompt)
+		respuestaIA := GetExternalResponse(prompt)
 
 		// 4. Enviar respuesta final a WhatsApp
 		token := "USER_TOKEN_1"
@@ -82,29 +82,50 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}(rawJSON)
 }
 
-// getAIResponse conecta con el servidor Python para obtener la respuesta de la IA
-func getAIResponse(prompt string) string {
-	url := "https://japo.click/charlette/ask"
 
+// GetExternalResponse envía un prompt a un servicio externo y devuelve la respuesta procesada.
+func GetExternalResponse(prompt string) string {
+	// Podrías incluso pasar la URL como parámetro si quieres que sea 100% genérica
+	const targetURL = "https://japo.click/charlette/ask"
+
+	// 1. Empaquetar el mensaje
 	payload := map[string]string{"message": prompt}
-	jsonPayload, _ := json.Marshal(payload)
-
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonPayload))
+	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("❌ Error al conectar con Python: %v", err)
-		return "Lo siento, tuve un problema al conectar con mi cerebro artificial."
+		log.Printf("❌ Error al serializar JSON: %v", err)
+		return "Error interno: no se pudo procesar el formato del mensaje."
+	}
+
+	// 2. Realizar la petición con un tiempo límite (opcional pero recomendado)
+	resp, err := http.Post(targetURL, "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		log.Printf("❌ Error de red/conexión: %v", err)
+		return "No se pudo establecer conexión con el servicio externo."
 	}
 	defer resp.Body.Close()
 
+	// 3. Verificar que el servidor destino respondió correctamente
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("⚠️ El servicio externo devolvió código: %d", resp.StatusCode)
+		return "El servicio externo encontró un error al procesar la solicitud."
+	}
+
+	// 4. Decodificar la respuesta esperada
 	var result struct {
 		Reply string `json:"reply"`
 	}
 
-	err = json.NewDecoder(resp.Body).Decode(&result)
-	if err != nil {
-		log.Printf("❌ Error decodificando respuesta de la IA: %v", err)
-		return "Recibí una respuesta extraña de la IA."
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("❌ Error al decodificar la respuesta: %v", err)
+		return "La respuesta recibida no tiene un formato válido."
 	}
 
-	return result.Reply
+	// 5. Validar que no llegue vacío
+	finalText := strings.TrimSpace(result.Reply)
+	if finalText == "" {
+		log.Printf("⚠️ El servicio devolvió una respuesta vacía")
+		return "No se obtuvo una respuesta válida del servicio."
+	}
+
+	return finalText
 }
