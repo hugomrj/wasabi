@@ -95,7 +95,7 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			log.Printf("✅ [%s] Respuesta enviada a %s", token, remitente)
 		}
-	}(rawJSON, instancia)
+	}(rawJSON, token)
 }
 
 
