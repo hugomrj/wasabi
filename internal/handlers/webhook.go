@@ -54,7 +54,9 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. Lanzar proceso en segundo plano pasando el token (instancia)
+	token := "USER_TOKEN_1"
+
+	// 4. Lanzar proceso en segundo plano pasando el token de instancia
 	go func(data string, token string) {
 		var payload WebhookPayload
 		if err := json.Unmarshal([]byte(data), &payload); err != nil {
@@ -95,6 +97,8 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}(rawJSON, instancia)
 }
+
+
 
 func GetExternalResponse(prompt string) string {
 	log.Printf("⏳ Mensaje en espera de turno para IA...")
