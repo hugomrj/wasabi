@@ -11,12 +11,12 @@ import (
 )
 
 func main() {
-	// Intentamos cargar el .env (en el servidor lo leerá de /srv/wasabi/.env)
+	// Intentamos cargar el .env
 	godotenv.Load()
 
 	port := os.Getenv("WASABI_PORT")
 	if port == "" {
-		port = "3000" // Cambié a 3000 por defecto para que coincida con tu config
+		port = "3000" 
 	}
 
 	// --- RUTAS ---

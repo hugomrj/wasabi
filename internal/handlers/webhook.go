@@ -6,7 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time" // Importante para el Sleep y Timeout
+	"time" 
 	"wasabi/internal/wuzapi"
 )
 
@@ -40,6 +40,16 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if rawJSON == "" {
 		return
 	}
+	// --- ESTO TE MOSTRARÁ TODO EN LA CONSOLA ---
+	if rawJSON != "" {
+		log.Printf("📥 JSON RECIBIDO: %s", rawJSON)
+	} else {
+		log.Printf("⚠️ Webhook llamado pero 'jsonData' está vacío")
+		return
+	}
+	// -------------------------------------------
+
+
 
 	go func(data string) {
 		var payload WebhookPayload
@@ -79,6 +89,10 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}(rawJSON)
 }
+
+
+
+
 
 func GetExternalResponse(prompt string) string {
 	// 3. ENTRADA A LA FILA: Si hay otro proceso, este espera aquí.
