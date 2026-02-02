@@ -39,6 +39,11 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// LOG VISUAL PARA DEPURACIÓN
+    log.Println("========================================")
+    log.Printf(" ID INSTANCIA DETECTADA: %s ", instancia)
+    log.Println("========================================")	
+
 	// 2. Responder 200 OK de inmediato a Wuzapi
 	w.WriteHeader(http.StatusOK)
 

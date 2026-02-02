@@ -7,13 +7,13 @@
     func MapRoutes(mux *http.ServeMux) {
         
         // Ruta de diagnóstico (indispensable para saber si el proceso corre)
-        mux.HandleFunc("/api/v1/health/ping", PingHandler)
+        mux.HandleFunc("/api/health/ping", PingHandler)
 
         // Ruta única de integración con Wuzapi
         //  mux.HandleFunc("/api/v1/wuzapi/webhook", WebhookHandler)
 
         // Usamos el método POST porque Wuzapi envía los mensajes así.
-        mux.HandleFunc("POST /api/v1/wuzapi/webhook/{instancia}", WebhookHandler)
+        mux.HandleFunc("POST /webhook/{instancia}", WebhookHandler)
 
 
     }
