@@ -35,6 +35,12 @@ var iaSemaphore = make(chan struct{}, 1)
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
+	// --- LOG GIGANTE PARA EL TOKEN ---
+	tokenDetectado := r.Header.Get("Token")
+	log.Println("################################################")
+	log.Printf("🔑 TOKEN DETECTADO: [%s]", tokenDetectado)
+	log.Println("################################################")
+
 	r.ParseForm()
 	rawJSON := r.FormValue("jsonData")
 	if rawJSON == "" {
