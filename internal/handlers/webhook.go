@@ -38,7 +38,11 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	// --- LOG GIGANTE PARA EL TOKEN ---
 	tokenDetectado := r.Header.Get("Token")
 	log.Println("################################################")
-	log.Printf("🔑 TOKEN DETECTADO: [%s]", tokenDetectado)
+	log.Println("--- INICIO HEADERS ---")
+    for nombre, valores := range r.Header {
+        log.Printf("Header: %s = %v", nombre, valores)
+    }
+    log.Println("--- FIN HEADERS ---")
 	log.Println("################################################")
 
 	r.ParseForm()
