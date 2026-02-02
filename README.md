@@ -42,6 +42,14 @@ WASABI_PORT=3000
 ```
 
 
+### URL de Wazapi
+```
+WUZAPI_URL=http://localhost:8080 
+```
+
+
+
+
 
 
 ```
