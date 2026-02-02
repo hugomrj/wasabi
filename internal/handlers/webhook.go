@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 	"wasabi/internal/wuzapi"
@@ -54,15 +55,26 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := "USER_TOKEN_1"
+
+	token := os.Getenv(instancia)    
+    targetURL := os.Getenv(instancia + "_URL") 
+    // Validación de seguridad para ambos
+    if token == "" || targetURL == "" {
+        log.Printf("❌ ERROR: Configuración incompleta para '%s' en .env (Falta token o URL)", instancia)
+        return 
+    }
+
+
 
 	// 4. Lanzar proceso en segundo plano pasando el token de instancia
-	go func(data string, token string) {
+	go func(data string,  instancia string, token string, targetURL string) {
 		var payload WebhookPayload
 		if err := json.Unmarshal([]byte(data), &payload); err != nil {
-			log.Printf("❌ [%s] Error decodificando payload: %v", token, err)
-			return
-		}
+            // USAR 'instancia' aquí en lugar de 'token'
+            log.Printf("❌ [%s] Error decodificando payload: %v", instancia, err)
+            return
+        }
+
 
 		// No responderse a uno mismo
 		if payload.EventData.Info.IsFromMe {
@@ -85,27 +97,31 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		remitente = strings.Split(strings.Split(remitente, "@")[0], ":")[0]
 
+
+
 		// Obtener respuesta de la IA (Gestionado por semáforo)
-		respuestaIA := GetExternalResponse(prompt)
+		respuestaIA := GetExternalResponse(prompt, targetURL)
 
 		// 5. USAR EL TOKEN EXTRAÍDO para responder
 		err := wuzapi.SendMessage(token, remitente, respuestaIA)
 		if err != nil {
-			log.Printf("❌ [%s] Error enviando a %s: %v", token, remitente, err)
-		} else {
-			log.Printf("✅ [%s] Respuesta enviada a %s", token, remitente)
-		}
-	}(rawJSON, token)
+            // USAR 'instancia' aquí para el log
+            log.Printf("❌ [%s] Error enviando a %s: %v", instancia, remitente, err)
+        } else {
+            // USAR 'instancia' aquí para el log
+            log.Printf("✅ [%s] Respuesta enviada a %s", instancia, remitente)
+        }
+	}(rawJSON, instancia, token, targetURL)
 }
 
 
 
-func GetExternalResponse(prompt string) string {
+func GetExternalResponse(prompt string, targetURL string) string {
 	log.Printf("⏳ Mensaje en espera de turno para IA...")
 	iaSemaphore <- struct{}{}
 	defer func() { <-iaSemaphore }()
 
-	const targetURL = "https://japo.click/charlette/ask"
+	// const targetURL = "https://japo.click/charlette/ask"
 	const maxRetries = 2
 
 	for i := 0; i < maxRetries; i++ {
@@ -135,5 +151,5 @@ func GetExternalResponse(prompt string) string {
 		}
 	}
 
-	return "Lo siento, mi cerebro está saturado. ¿Podrías intentar en un momento?"
+	return "Lo siento ¿Podrías intentar en un momento?"
 }
