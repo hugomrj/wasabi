@@ -1,74 +1,69 @@
 # 🌿 Wasabi - Wuzapi Webhook Processor
 
-**Wasabi** es un middleware ligero desarrollado en Go diseñado para recibir eventos de **Wuzapi** y procesarlos de manera eficiente. Está optimizado para entornos multi-instancia, permitiendo gestionar múltiples números de WhatsApp desde un solo punto de enlace.
+**Wasabi** es un middleware de alto rendimiento desarrollado en Go, diseñado para actuar como puente entre **Wuzapi** (WhatsApp API) y servicios de Inteligencia Artificial externos. Su arquitectura está optimizada para entornos **multi-instancia**, permitiendo gestionar múltiples cuentas de WhatsApp con configuraciones de IA independientes desde un único servidor.
 
 ## 🚀 Características
 
-- **Multi-instancia:** Detecta automáticamente qué instancia envía el mensaje mediante headers de Token.
-- **Arquitectura Limpia:** Separación clara entre modelos, manejadores y lógica de cliente.
-- **Instalación Automatizada:** Incluye un script en Python para despliegue rápido en servidores Linux.
-- **Servicio de Sistema:** Configurado para correr como un servicio de `systemd` (24/7).
+- **Multi-instancia Dinámico:** Gestiona múltiples clientes mediante rutas variables (`/webhook/{id_instancia}`).
+- **Procesamiento Asíncrono:** Utiliza Goroutines para procesar mensajes en segundo plano sin bloquear el flujo del webhook.
+- **Control de Concurrencia:** Implementa un sistema de semáforos para gestionar la carga de peticiones hacia la IA externa.
+- **Identificación en Logs:** Cada evento está etiquetado con el nombre de la instancia para una depuración rápida.
+- **Agnóstico:** Añade nuevos clientes simplemente editando el archivo `.env`, sin necesidad de recompilar el binario.
 
 ## 📂 Estructura del Proyecto
 
 ```text
 .
-├── cmd/wasabi/main.go        # Punto de entrada del servidor
+├── cmd/main.go               # Punto de entrada del servidor
 ├── internal/
-│   ├── handlers/             # Lógica de las rutas (Webhook, Health)
-│   ├── models/               # Definición de estructuras JSON
-│   └── wuzapi/               # Cliente para enviar mensajes a Wuzapi
-├── .env                      # Configuración de entorno (no incluido en git)
-├── go.mod                    # Dependencias de Go
-└── wasabi_installer.py       # Script de instalación automática
+│   ├── handlers/             # Manejadores de rutas y lógica de IA
+│   ├── models/               # Estructuras de datos (Webhook payloads)
+│   └── wuzapi/               # Cliente para envío de mensajes
+├── .env                      # Variables de entorno (Tokens y URLs)
+└── go.mod                    # Dependencias del proyecto
 ```
-
-
-🛠️ Instalación en Servidor (Ubuntu)
-1. Requisitos Previos
-Go 1.21+ instalado (sudo apt install golang-go)
-
-Python 3
-
-2. Despliegue Rápido
-Utiliza el instalador incluido para desplegar en /srv/wasabi:
-
-```Bash
-python3 wasabi_installer.py
-```
-El script se encargará de:
-
-Clonar el repositorio.
-
-Crear el archivo .env.
-
-Compilar el binario de Go.
-
-Crear y activar el servicio en systemd.
 
 ⚙️ Configuración (.env)
-El archivo .env debe contener las siguientes variables:
+Wasabi utiliza un sistema de mapeo dinámico basado en el ID de la instancia que llega por la URL. Por cada cliente, debes añadir su Token de Wuzapi y su URL de IA correspondiente en el archivo .env:
 
-WUZAPI_URL: Dirección base donde corre tu API de Wuzapi (ej. http://localhost:8080).
+Fragmento de código
+# Puerto donde corre Wasabi
+WASABI_PORT=3000
 
-WASABI_PORT: Puerto donde escuchará este webhook (ej. 3000).
+# --- CONFIGURACIÓN DE CLIENTES ---
+# Formato: 
+# NOMBRE_ID=TOKEN_WUZAPI
+# NOMBRE_ID_URL=URL_IA_CORRESPONDIENTE
 
+# Ejemplo para un cliente llamado 'ventas'
+ventas=TU_TOKEN_WUZAPI_AQUI
+ventas_URL=[https://tu-ia.com/ventas/ask](https://tu-ia.com/ventas/ask)
+
+# Ejemplo para un cliente llamado 'soporte'
+soporte=OTRO_TOKEN_WUZAPI
+soporte_URL=[https://tu-ia.com/soporte/ask](https://tu-ia.com/soporte/ask)
 📡 Uso del Webhook
-Para que Wuzapi envíe mensajes a Wasabi, debes registrar el webhook en cada instancia:
+Para que los mensajes lleguen a Wasabi, debes configurar la URL del webhook en cada instancia de Wuzapi utilizando el ID definido en tu archivo de configuración:
 
+URL del Webhook: http://TU_IP_O_DOMINIO:3000/webhook/{ID_INSTANCIA}
+
+Registro vía CURL:
 ```Bash
-
-curl -X POST http://localhost:8080/webhook \
-  -H "Token: TU_USER_TOKEN" \
+curl -X POST http://localhost:8080/instance/set \
+  -H "token: TOKEN_DE_LA_INSTANCIA" \
   -H "Content-Type: application/json" \
   -d '{
-    "webhook": "http://TU_IP_SERVIDOR:3000/webhook",
-    "events": ["Message"]
+    "webhook_url": "http://TU_IP:3000/webhook/ventas"
   }'
-```  
-📊 Monitoreo y Logs
-Para ver la actividad del webhook en tiempo real:
+```
+
+🛠️ Despliegue
+Compilación Manual
+Si deseas compilar el binario en tu entorno:
 
 ```Bash
-journalctl -u wasabi -f
+go build -o wasabi cmd/main.go
+./wasabi
 ```
+
+Nota Técnica: El sistema vincula automáticamente la ruta /webhook/xyz con las variables xyz y xyz_URL definidas en el entorno. Si el ID no existe en el .env o la configuración está incompleta, Wasabi rechazará la petición y lo notificará en los logs.
