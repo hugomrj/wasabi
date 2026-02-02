@@ -1,0 +1,42 @@
+# --- Binarios y Ejecutables ---
+# Ignora el ejecutable compilado de Go
+wasabi
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+
+# --- Configuración y Secretos (CRÍTICO) ---
+# Solo subiremos el .env.example, nunca el .env real
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+
+# --- Dependencias de Go ---
+# vendor/ # Descomenta si prefieres no usar el cache de módulos de Go
+
+# --- Scripts de Python (Instalador) ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+venv/
+ENV/
+
+# --- Logs y Temporales ---
+*.log
+logs/
+tmp/
+.DS_Store
+Thumbs.db
+
+# --- IDEs y Editores ---
+.vscode/
+.idea/
+*.swp
+*.swo

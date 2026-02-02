@@ -1,5 +1,6 @@
 # 🌿 Wasabi – Wuzapi Webhook Processor
 
+
 **Wasabi** es una capa de orquestación y middleware de alto rendimiento desarrollada en Go. Su función principal es actuar como puente inteligente entre **Wuzapi** (que gestiona la conexión con WhatsApp) y servicios externos de **IA**.
 
 Wasabi no se conecta directamente a WhatsApp; en su lugar, recibe los eventos de las múltiples instancias de Wuzapi, los procesa y los distribuye a sus respectivos motores de IA de forma eficiente y aislada.
