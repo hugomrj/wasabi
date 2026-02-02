@@ -6,11 +6,11 @@ import (
 	"log"
 	"net/http"
 	"strings"
-	"time" 
+	"time"
 	"wasabi/internal/wuzapi"
 )
 
-// WebhookPayload representa la estructura genérica del mensaje entrante
+// WebhookPayload se mantiene igual (puedes moverlo a internal/models/wuzapi.go si prefieres)
 type WebhookPayload struct {
 	EventData struct {
 		Info struct {
@@ -28,85 +28,86 @@ type WebhookPayload struct {
 	} `json:"event"`
 }
 
-// 1. SEMÁFORO GLOBAL: Solo permite 1 consulta a la vez a la IA.
-// Esto garantiza que los mensajes hagan fila y no saturen la RAM.
 var iaSemaphore = make(chan struct{}, 1)
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
+	// 1. Extraer token dinámico de la URL (Go 1.22+)
+	instancia := r.PathValue("instancia")
+	if instancia == "" {
+		log.Printf("⚠️ Webhook recibido sin instancia en la URL")
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// 2. Responder 200 OK de inmediato a Wuzapi
 	w.WriteHeader(http.StatusOK)
 
-
+	// 3. Procesar Formulario
 	r.ParseForm()
 	rawJSON := r.FormValue("jsonData")
 	if rawJSON == "" {
 		return
 	}
 
-	go func(data string) {
+	// 4. Lanzar proceso en segundo plano pasando el token (instancia)
+	go func(data string, token string) {
 		var payload WebhookPayload
 		if err := json.Unmarshal([]byte(data), &payload); err != nil {
-			log.Printf("❌ Error decodificando payload: %v", err)
+			log.Printf("❌ [%s] Error decodificando payload: %v", token, err)
 			return
 		}
 
+		// No responderse a uno mismo
 		if payload.EventData.Info.IsFromMe {
 			return
 		}
 
+		// Extraer el texto del mensaje
 		prompt := payload.EventData.Message.Conversation
 		if prompt == "" {
 			prompt = payload.EventData.Message.ExtendedText.Text
 		}
-
 		if prompt == "" {
 			return
 		}
 
+		// Limpiar número de teléfono
 		remitente := payload.EventData.Info.Sender
 		if payload.EventData.Info.SenderAlt != "" {
 			remitente = payload.EventData.Info.SenderAlt
 		}
 		remitente = strings.Split(strings.Split(remitente, "@")[0], ":")[0]
 
-		// 2. LLAMADA AL DOMINIO: GetExternalResponse ahora gestiona la fila
+		// Obtener respuesta de la IA (Gestionado por semáforo)
 		respuestaIA := GetExternalResponse(prompt)
 
-		token := "USER_TOKEN_1"
+		// 5. USAR EL TOKEN EXTRAÍDO para responder
 		err := wuzapi.SendMessage(token, remitente, respuestaIA)
 		if err != nil {
-			log.Printf("❌ Error enviando a %s: %v", remitente, err)
+			log.Printf("❌ [%s] Error enviando a %s: %v", token, remitente, err)
 		} else {
-			log.Printf("✅ Respuesta enviada con éxito a %s", remitente)
+			log.Printf("✅ [%s] Respuesta enviada a %s", token, remitente)
 		}
-	}(rawJSON)
+	}(rawJSON, instancia)
 }
 
-
-
-
-
 func GetExternalResponse(prompt string) string {
-	// 3. ENTRADA A LA FILA: Si hay otro proceso, este espera aquí.
 	log.Printf("⏳ Mensaje en espera de turno para IA...")
 	iaSemaphore <- struct{}{}
-	defer func() { <-iaSemaphore }() // Libera el turno al salir
+	defer func() { <-iaSemaphore }()
 
 	const targetURL = "https://japo.click/charlette/ask"
 	const maxRetries = 2
 
-	log.Printf("📩 Procesando IA ahora...")
-
 	for i := 0; i < maxRetries; i++ {
-		// Preparar Payload
 		payload := map[string]string{"message": prompt}
 		jsonPayload, _ := json.Marshal(payload)
 
-		// Cliente con Timeout para no quedarse colgado
 		client := &http.Client{Timeout: 45 * time.Second}
 		resp, err := client.Post(targetURL, "application/json", bytes.NewBuffer(jsonPayload))
 
 		if err != nil || (resp != nil && resp.StatusCode != http.StatusOK) {
-			log.Printf("⚠️ Intento %d fallido. Reintentando...", i+1)
+			log.Printf("⚠️ Reintento %d IA fallido", i+1)
 			if resp != nil {
 				resp.Body.Close()
 			}
@@ -117,16 +118,12 @@ func GetExternalResponse(prompt string) string {
 		var result struct {
 			Reply string `json:"reply"`
 		}
-
 		err = json.NewDecoder(resp.Body).Decode(&result)
 		resp.Body.Close()
 
 		if err == nil && strings.TrimSpace(result.Reply) != "" {
 			return result.Reply
 		}
-
-		log.Printf("⚠️ Respuesta vacía en intento %d", i+1)
-		time.Sleep(1 * time.Second)
 	}
 
 	return "Lo siento, mi cerebro está saturado. ¿Podrías intentar en un momento?"

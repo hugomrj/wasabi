@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,29 +10,29 @@ import (
 )
 
 func main() {
-	// Intentamos cargar el .env
+	// 1. Cargar variables de entorno (.env)
+	// No es fatal si no existe, por eso ignoramos el error
 	godotenv.Load()
 
 	port := os.Getenv("WASABI_PORT")
 	if port == "" {
-		port = "3000" 
+		port = "3000"
 	}
 
-	// --- RUTAS ---
-	
-	// Ruta de Salud (Para verificar que el binario corre)
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "🌿 Wasabi está en línea (Puerto %s)", port)
-	})
+	// 2. CREAR EL ROUTER (ServeMux)
+	// Usamos un mux propio para soportar rutas dinámicas como /webhook/{instancia}
+	mux := http.NewServeMux()
 
-	// Ruta del Webhook para Wuzapi
-	http.HandleFunc("/webhook", handlers.WebhookHandler)
+	// 3. REGISTRAR RUTAS DESDE EL HANDLER
+	// Esto llama a tu archivo internal/handlers/routes.go y configura las rutas
+	handlers.MapRoutes(mux)
 
-	// --- INICIO ---
+	// 4. INICIAR EL SERVIDOR
 	log.Printf("🚀 Wasabi levantado en el puerto %s", port)
-	
-	// Escuchar en todas las interfaces para que sea accesible desde afuera
-	err := http.ListenAndServe(":"+port, nil)
+	log.Printf("📌 Rutas activas: /health, /api/v1/health/ping, /webhook/{instancia}")
+
+	// Importante: Pasamos 'mux' en lugar de 'nil'
+	err := http.ListenAndServe(":"+port, mux)
 	if err != nil {
 		log.Fatal("❌ Error al iniciar el servidor: ", err)
 	}
