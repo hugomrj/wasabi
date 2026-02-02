@@ -35,30 +35,12 @@ var iaSemaphore = make(chan struct{}, 1)
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
-	// --- LOG GIGANTE PARA EL TOKEN ---
-	log.Println("################################################")
-	log.Println("--- INICIO HEADERS ---")
-    for nombre, valores := range r.Header {
-        log.Printf("Header: %s = %v", nombre, valores)
-    }
-    log.Println("--- FIN HEADERS ---")
-	log.Println("################################################")
 
 	r.ParseForm()
 	rawJSON := r.FormValue("jsonData")
 	if rawJSON == "" {
 		return
 	}
-	// --- ESTO TE MOSTRARÁ TODO EN LA CONSOLA ---
-	if rawJSON != "" {
-		log.Printf("📥 JSON RECIBIDO: %s", rawJSON)
-	} else {
-		log.Printf("⚠️ Webhook llamado pero 'jsonData' está vacío")
-		return
-	}
-	// -------------------------------------------
-
-
 
 	go func(data string) {
 		var payload WebhookPayload
