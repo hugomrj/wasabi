@@ -100,7 +100,8 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 
 		// Obtener respuesta de la IA (Gestionado por semáforo)
-		respuestaIA := GetExternalResponse(prompt, targetURL)
+		respuestaIA := GetExternalResponse(prompt, remitente, targetURL)
+
 
 		// 5. USAR EL TOKEN EXTRAÍDO para responder
 		err := wuzapi.SendMessage(token, remitente, respuestaIA)
@@ -114,42 +115,41 @@ func WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	}(rawJSON, instancia, token, targetURL)
 }
 
+func GetExternalResponse(prompt string, sender string, targetURL string) string {
+    // Log ultra corto
+    log.Printf("⏳ IA: esperando turno para %s...", sender)
+    
+    iaSemaphore <- struct{}{}
+    defer func() { <-iaSemaphore }()
 
+    const maxRetries = 2
+    for i := 0; i < maxRetries; i++ {
+        // Solo enviamos mensaje y quién lo envía
+        payload := map[string]string{
+            "message": prompt,
+            "sender":  sender,
+        }
+        jsonPayload, _ := json.Marshal(payload)
 
-func GetExternalResponse(prompt string, targetURL string) string {
-	log.Printf("⏳ Mensaje en espera de turno para IA...")
-	iaSemaphore <- struct{}{}
-	defer func() { <-iaSemaphore }()
+        client := &http.Client{Timeout: 45 * time.Second}
+        resp, err := client.Post(targetURL, "application/json", bytes.NewBuffer(jsonPayload))
 
-	// const targetURL = "https://japo.click/charlette/ask"
-	const maxRetries = 2
+        if err != nil || (resp != nil && resp.StatusCode != http.StatusOK) {
+            log.Printf("⚠️ Error IA reintento %d", i+1)
+            if resp != nil { resp.Body.Close() }
+            time.Sleep(2 * time.Second)
+            continue
+        }
 
-	for i := 0; i < maxRetries; i++ {
-		payload := map[string]string{"message": prompt}
-		jsonPayload, _ := json.Marshal(payload)
+        var result struct {
+            Reply string `json:"reply"`
+        }
+        err = json.NewDecoder(resp.Body).Decode(&result)
+        resp.Body.Close()
 
-		client := &http.Client{Timeout: 45 * time.Second}
-		resp, err := client.Post(targetURL, "application/json", bytes.NewBuffer(jsonPayload))
-
-		if err != nil || (resp != nil && resp.StatusCode != http.StatusOK) {
-			log.Printf("⚠️ Reintento %d IA fallido", i+1)
-			if resp != nil {
-				resp.Body.Close()
-			}
-			time.Sleep(2 * time.Second)
-			continue
-		}
-
-		var result struct {
-			Reply string `json:"reply"`
-		}
-		err = json.NewDecoder(resp.Body).Decode(&result)
-		resp.Body.Close()
-
-		if err == nil && strings.TrimSpace(result.Reply) != "" {
-			return result.Reply
-		}
-	}
-
-	return "Lo siento ¿Podrías intentar en un momento?"
+        if err == nil && strings.TrimSpace(result.Reply) != "" {
+            return result.Reply
+        }
+    }
+    return "Lo siento, intenta en un momento."
 }
